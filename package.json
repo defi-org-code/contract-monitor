@@ -1,0 +1,10 @@
+{
+  "name": "contract-monitor",
+  "version": "1.0.0",
+  "description": "An express application",
+  "main": "main.js",
+  "dependencies": {
+    "axios": "^0.21.1",
+    "web3": "^1.3.5"
+  }
+}
