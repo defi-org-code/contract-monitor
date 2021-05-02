@@ -3,14 +3,20 @@ var pastEvents = require('./pastEvents');
 const configFile = "config.json";
 const fs = require('fs');
 const VERSION = process.env.VERSION || 'SET VERSION IN ENVIRONMENT'
-const INTERVAL = process.env.INTERVAL || 60000;
+const INTERVAL = parseInt(process.env.INTERVAL);
 const alchemy =  process.env.ALCHEMY || 'wss://eth-mainnet.ws.alchemyapi.io/v2/bJ2UJBAltFD_dh9J9Zv6gadbiaX5tOJf';
+const contractAlerts = process.env.CONTRACT_ALERTS || 'https://discord.com/api/webhooks/836247466096459830/OUh8wM7HzEsu86IpPIJ78H_luZ6diZUpFxHSZUDv6oosJa9SyiYI1KRQO11pcz3jLiwj';
 const axios = require('axios');
 //let web3 = new Web3(Web3.givenProvider || "ws://localhost:8545");
 let web3 = new Web3(alchemy || "ws://localhost:8545");
 var abi = require('./timelock-sushi-abi.js');
 var contractAddress = '0x9a8541Ddf3a932a9A922B607e9CF7301f1d47bD1'; //Timelock-Sushi-Masterchef
-const contractAlerts = process.env.CONTRACT_ALERTS || 'https://discord.com/api/webhooks/836247466096459830/OUh8wM7HzEsu86IpPIJ78H_luZ6diZUpFxHSZUDv6oosJa9SyiYI1KRQO11pcz3jLiwj';
+
+const tmplt_exception = `{
+  "username": "contract-bot",
+  "avatar_url": "https://www.orbs.com/wp-content/uploads/2018/07/Orbs.png",
+  "content": "**EXCEPTION** exception thrown on main(): ",
+}`;
 
 const tmplt = `{
   "username": "contract-bot",
@@ -105,8 +111,11 @@ async function main(){
   console.log(`== ORBS CONTRACT MONITOR V${VERSION}`)
   let curBlock = await web3.eth.getBlockNumber().catch(e => console.error(e));
   console.log(`== CURRENT_BLOCK ${curBlock}`)
-  console.log("=============================================")
-  
+  console.log(`VERSION: ${VERSION}`);
+  console.log(`INTERVAL: ${INTERVAL}`);
+  console.log(`WEB3: ${alchemy}`);
+  console.log(`CONTRACT_ALERTS_API: ${contractAlerts}`);  
+  console.log("=============================================")  
   let config = load(curBlock);
 
   setInterval(async ()=>{
@@ -125,5 +134,15 @@ async function main(){
 }
 ////////////////////////////////////////////////////////////////
 if (require.main === module) {
-  main();  
+  try{
+    main();  
+  }catch(e){
+    console.error("main error", e);
+    // send exception to discord
+    let str = tmplt_exception;
+    let estr = ""+e;
+    str = str.replace(/ERROR/g, estr);
+    sendAlert(str);
+  }
 }
+
