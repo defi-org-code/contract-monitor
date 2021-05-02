@@ -11,11 +11,7 @@ const BLOCKS_PER_HOUR = BLOCKS_PER_MINUTE * 60;
 const BLOCKS_PER_DAY = BLOCKS_PER_HOUR * 24;
 
 async function getEventsPara(contract, eventName, fromBlock, latestBlock, returnOnFirst){
-  //console.log(`getEventsPara total ${fromBlock}-${latestBlock}`)
-  let latest = latestBlock? latestBlock : await web3.eth.getBlockNumber();    
-  if( latest <= fromBlock ){
-    return; //resolve(nil);
-  }
+  console.log(`getEventsPara total ${fromBlock}-${latestBlock}`)
   events = [];
   
   let start = fromBlock;
@@ -52,17 +48,19 @@ async function getEventsPara(contract, eventName, fromBlock, latestBlock, return
             return events;
         }
     }    
-  }
-
-  //console.timeEnd("getEventsPara");
-  
+  } 
   return events;  
 }
 
 async function test(){
   // test overlapping
   const ctrct = new web3.eth.Contract(abi, univ2); 
-
+  let latest = latestBlock? latestBlock : await web3.eth.getBlockNumber().on("error", (error)=>{
+    console.error("getBlockNumber")
+  });    
+  if( latest <= fromBlock ){
+    return; //resolve(nil);
+  }
   let evs = await getEventsPara(ctrct, ExecuteTransaction, latest-twoWeeks, latest);
   console.timeEnd("test");  
   var blocks = {}
