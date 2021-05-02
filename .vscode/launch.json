@@ -11,6 +11,12 @@
       "skipFiles": [
         "<node_internals>/**"
       ],
+      "env": {
+        "VERSION" : "DEV",
+        "INTERVAL" : "10000", // DEV
+        "ALCHEMY" : "wss://eth-mainnet.ws.alchemyapi.io/v2/bJ2UJBAltFD_dh9J9Zv6gadbiaX5tOJf",
+        "CONTRACT_ALERTS" : "https://discord.com/api/webhooks/836247466096459830/OUh8wM7HzEsu86IpPIJ78H_luZ6diZUpFxHSZUDv6oosJa9SyiYI1KRQO11pcz3jLiwj"
+      },
       "program": "${file}"
     }
   ]
