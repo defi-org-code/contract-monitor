@@ -106,12 +106,13 @@ async function check(from, to) {
 }
 ////////////////////////////////////////////////////////////////
 function load(curBlock){
-  const dayBlocks = 21600;
+  const blocks1H = 4 * 60;
   try{
     return JSON.parse(fs.readFileSync(configFile, 'utf8'));
   }catch(e){        
     return {      
-      to: curBlock - dayBlocks
+      to: curBlock,
+      from: curBlock
     }
   }
 }
@@ -133,16 +134,16 @@ async function main(){
   console.log("=============================================")  
   let config = load(curBlock);
   
-  setInterval(async ()=>{           
-    if(curBlock){     
-      if (config.to > config.from && await check(config.from, config.to)){      
-        if (curBlock){
-          save(config);
-        }
+  setInterval(async ()=>{
+    config.to = await web3.eth.getBlockNumber().catch(e => console.error(e));
+    if(config.to){     
+      if (config.to > config.from && await check(config.from, config.to)){          
+        save(config);
+        config.from = config.to; 
       }
     }
-    config.from = config.to; 
-    curBlock = await web3.eth.getBlockNumber().catch(e => console.error(e));
+    
+    
   },INTERVAL);
 }
 ////////////////////////////////////////////////////////////////
