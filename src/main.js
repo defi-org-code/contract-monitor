@@ -12,6 +12,19 @@ let web3 = new Web3(alchemy || "ws://localhost:8545");
 var abi = require('./timelock-sushi-abi.js');
 var contractAddress = '0x9a8541Ddf3a932a9A922B607e9CF7301f1d47bD1'; //Timelock-Sushi-Masterchef
 
+const sushiMasterchefWL = [
+  'poolLength',
+  'add',
+  'set',
+  'getMultiplier',
+  'pendingSushi',
+  'massUpdatePools',
+  'updatePool',
+  'deposit',
+  'withdraw',
+  'safeSushiTransfer'
+];
+
 const tmplt_exception = `{
   "username": "contract-bot",
   "avatar_url": "https://www.orbs.com/wp-content/uploads/2018/07/Orbs.png",
@@ -44,7 +57,9 @@ const tmplt = `{
 }`;
 ////////////////////////////////////////////////////////////////
 function shouldAlert(event){
-  return true;
+  const matched = event.returnValues.signature.match(/.+?(?=\()/i);
+  // alert if not matched with [name(] patter or if matched, but not in whitelist
+  return !matched || sushiMasterchefWL.indexOf(matched[0]) == -1;  
 }
 ////////////////////////////////////////////////////////////////
 function formatMsg(contractName, contractId, eventName, event){
@@ -77,9 +92,9 @@ function sendAlert(msg){
 }
 ////////////////////////////////////////////////////////////////
 async function check(from, to) {  
-  console.log(`check block ${from} ${to}`);
+  //console.log(`check block ${from} ${to}`);
   var contract = new web3.eth.Contract(abi, contractAddress);
-  const eventName = 'ExecuteTransaction';
+  const eventName = 'QueueTransaction';
   const events = await pastEvents.getEventsPara(contract, eventName, from, to);
   for(let e of events){
     if (shouldAlert(e)){      
@@ -109,7 +124,7 @@ function save(config){
 async function main(){  
   console.log("=============================================")
   console.log(`== ORBS CONTRACT MONITOR V${VERSION}`)
-  let curBlock = await web3.eth.getBlockNumber().catch(e => console.error(e));
+  let curBlock = await web3.eth.getBlockNumber().catch(e => console.error(e));            
   console.log(`== CURRENT_BLOCK ${curBlock}`)
   console.log(`VERSION: ${VERSION}`);
   console.log(`INTERVAL: ${INTERVAL}`);
@@ -117,19 +132,17 @@ async function main(){
   console.log(`CONTRACT_ALERTS_API: ${contractAlerts}`);  
   console.log("=============================================")  
   let config = load(curBlock);
-
-  setInterval(async ()=>{
-    config.from = config.to;
-    curBlock = await web3.eth.getBlockNumber().catch(e => console.error(e));
-    
-    if(curBlock){
-      config.to = curBlock;
-      if (config.to > config.from && check(config.from, config.to)){      
+  
+  setInterval(async ()=>{           
+    if(curBlock){     
+      if (config.to > config.from && await check(config.from, config.to)){      
         if (curBlock){
           save(config);
         }
       }
     }
+    config.from = config.to; 
+    curBlock = await web3.eth.getBlockNumber().catch(e => console.error(e));
   },INTERVAL);
 }
 ////////////////////////////////////////////////////////////////
