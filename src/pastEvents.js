@@ -1,17 +1,10 @@
-// Address of DAI contract
-// const daiMainNetAddress = "0x6B175474E89094C44Da98b954EedeAC495271d0F";
-// const daiAbi = []
-// DAI=new web3.eth.Contract(daiABI, daiMainNetAddress)
 
-// const abi = require('erc-20-abi')
-// let web3 = require('./web3Provider');
- 
 const BLOCKS_PER_MINUTE = 4;
 const BLOCKS_PER_HOUR = BLOCKS_PER_MINUTE * 60;
 const BLOCKS_PER_DAY = BLOCKS_PER_HOUR * 24;
 
 async function getEventsPara(contract, eventName, fromBlock, latestBlock, returnOnFirst){
-  console.log(`getEventsPara total ${fromBlock}-${latestBlock}`)
+  console.log(`${contract.options.address}:${eventName} getEventsPara total ${fromBlock}-${latestBlock}`)
   events = [];
   
   let start = fromBlock;
