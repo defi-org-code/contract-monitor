@@ -1,5 +1,10 @@
 node_modules
+del
+# should be manualy copied - has api keys
+monitor-config.js
+
 package-lock.json
-config.json
+blockTrack.json
+.DS_store
 *.tar.gz
 
