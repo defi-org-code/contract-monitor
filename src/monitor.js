@@ -49,9 +49,11 @@ class Watch{
     const events = await pastEvents.getEventsPara(this.contract, this.eventName, track.from, track.to);
     for(let e of events){
       if (this.shouldAlert(e)){      
-        console.log(e.event, e.blockNumber,  e.id, e.returnValues.signature);      
-        const msg = this.chan.formatMsg(this.name, this.address, this.eventName, e);
-        await this.chan.send(msg);
+        console.log(e.event, e.blockNumber,  e.id, e.returnValues.signature);
+        if(this.chan){
+          const msg = this.chan.formatMsg(this.name, this.address, this.eventName, e);
+          await this.chan.send(msg);
+        }
       }
     }    
   }
@@ -135,7 +137,7 @@ class Monitor{
   async start() {
     let chan = new channel.Channel(config.channelApi, config.minHeartbeat);
     this.initNetwork();
-    const watchers = this.loadWatchers(chan)
+    const watchers = this.loadWatchers(chan);
 
     console.log("=============================================")
     console.log(`== ORBS CONTRACT MONITOR V${this.VERSION}`);
@@ -157,9 +159,20 @@ class Monitor{
 module.exports = {
   Monitor: Monitor
 }
-
-///test
+////////////////////////////////////////////////////////
+async function testBunny(){                         
+  const web3 = new Web3('wss://misty-white-haze.bsc.quiknode.pro/18a20ffabf304a0b476b92ba91ea9aadaf6a3516/');  
+  // sanity
+  const curBlock = await web3.eth.getBlockNumber().catch(e => console.error(e));
+  const network = {
+    "BSC" : web3
+  };
+  let w = new Watch("./watch/timelock-bunny.json", "./watch-abi/timelock-bunny.json", network, null);
+  w.check({from:7282279,to:7282280});
+}
+///////////////////////////////////////////////////////////
+// test
 if (require.main === module) {  
-  let mon = new Monitor("TEST");     
-  mon.start();
+  testBunny();
+
 }
