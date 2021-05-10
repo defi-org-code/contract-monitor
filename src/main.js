@@ -2,7 +2,7 @@ let monitor = require('./monitor');
 var pastEvents = require('./pastEvents');
 
 ///////////////////////////////////
-const VERSION = "1.4"
+const VERSION = "1.5"
 
 ///////////////////////////////////
 if (require.main === module) {
