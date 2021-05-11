@@ -1,21 +1,22 @@
 const axios = require('axios');
 
-const tmplt_debug = `{
-  "username": "contract-bot",
-  "avatar_url": "https://www.orbs.com/wp-content/uploads/2018/07/Orbs.png",
-  "content": "**TEST/DEBUG** --------------------------------------------"
-}`
-
 const tmplt_heartbeat = `{
   "username": "contract-bot",
   "avatar_url": "https://www.orbs.com/wp-content/uploads/2018/07/Orbs.png",
   "content": "*Heartbeat* sent every {MIN} minutes"
 }`
 
-const tmplt_exception = `{
+// const tmplt_exception = `{
+//   "username": "contract-bot",
+//   "avatar_url": "https://www.orbs.com/wp-content/uploads/2018/07/Orbs.png",
+//   "content": "**EXCEPTION** exception thrown on main(): ",
+// }`;
+
+const tmplt_msg = `{
   "username": "contract-bot",
   "avatar_url": "https://www.orbs.com/wp-content/uploads/2018/07/Orbs.png",
-  "content": "**EXCEPTION** exception thrown on main(): ",
+  "content": "{TITLE}",
+  "embeds": []
 }`;
 
 const tmplt_alert = `{
@@ -83,13 +84,33 @@ class Channel{
     }
   }
   //////////////////////////////////////////////////////////////// 
-  async send(msg){
-    // send debug message
-    if(!this.production){
-      await axios.post(this.api, JSON.parse(tmplt_debug)).catch(error => console.error(error));  
+  formatEmbed(input, color){
+    var res = {                        
+      "color": color,
+      "fields": []      
+    };
+    for (let f in input){
+      res.fields.push({
+        name:f,
+        value: typeof input[f] === 'object' ? JSON.stringify(input[f]): input[f]
+      });
     }
-    
-    await axios.post(this.api, msg).catch(error => console.error(error));
+    return res;
+  }
+  //////////////////////////////////////////////////////////////// 
+  async sendMsg(title, embedObj, color){
+    let jsn = tmplt_msg.replace('{TITLE}', title);
+    let obj = JSON.parse(jsn);
+    if(embedObj){
+      if(!color)
+        color = 15258703;
+      obj.embeds.push(this.formatEmbed(embedObj, color))
+    }
+    await this.send(obj);
+  }
+  //////////////////////////////////////////////////////////////// 
+  async send(obj){       
+    await axios.post(this.api, obj).catch(error => console.error(error));
   }
 }
 
