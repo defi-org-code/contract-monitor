@@ -12,7 +12,8 @@ class Watch{
     this.loaded = false;
     let config = null;
     try {
-      config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+      let config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+      chan.sendMsg('Load Watch config', config);
       this.abi = JSON.parse(fs.readFileSync(abiFile, 'utf8'));      
       this.name = config.name;
       this.network = config.network;
@@ -135,23 +136,34 @@ class Monitor{
   
   ////////////////////////////////////////////////////////
   async start() {
-    let chan = new channel.Channel(config.channelApi, config.minHeartbeat);
+    const isProduction = process.env.PRODUCTION==1;
+    let chan = new channel.Channel(isProduction? config.channelApi: config.channelDBG, config.minHeartbeat);
+   
+    await chan.sendMsg(`-------------------- CONTRACT MONITOR ${this.VERSION} start --------------------`, config);
+
     this.initNetwork();
     const watchers = this.loadWatchers(chan);
 
     console.log("=============================================")
     console.log(`== ORBS CONTRACT MONITOR V${this.VERSION}`);
-    console.log(`== PRODUCTION = ${process.env.PRODUCTION==1? 'true':'false'}`);
+    console.log(`== PRODUCTION = ${isProduction? 'true':'false'}`);
     console.log(JSON.stringify(config, null,2));
     console.log("============================================="); 
 
     setInterval(async ()=>{
-      await this.check(watchers);
-      // save tracl per each watcher      
-      const jsn = JSON.stringify(this.track);
-      fs.writeFileSync('./blockTrack.json', jsn);
-      // channel
-      await chan.heartbeat();
+      try{      
+        // check blockchain
+        await this.check(watchers);
+        // save tracl per each watcher      
+        const jsn = JSON.stringify(this.track);
+        fs.writeFileSync('./blockTrack.json', jsn);        
+        // channel
+        await chan.heartbeat();
+      }catch(e){
+        console.error("monitor error", e);
+        // send exception to discord        
+        await chan.sendMsg("monitor error: "+e);
+      }
     }, config.secInterval * 1000);
   }
 }
