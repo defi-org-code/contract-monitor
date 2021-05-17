@@ -1,4 +1,6 @@
 var Web3 = require('web3');
+const graphite = require('graphite');
+
 var pastEvents = require('./pastEvents');
 const config = require('./monitor-config');
 const channel = require('./channel');
@@ -7,10 +9,88 @@ var path = require('path');
 
 
 ////////////////////////////////////////////////////////
-class Watch{
+class Task{
+  ////////////////////////////////////////////////////////
   constructor(configFile, abiFile, network, chan) {
-    this.loaded = false;
-    let config = null;
+    this.lastTime = null;
+    this.loaded = false;    
+    try {
+      let config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+      chan.sendMsg('Load Task config', config);
+      this.abi = JSON.parse(fs.readFileSync(abiFile, 'utf8'));      
+      this.name = config.name;
+      this.network = config.network;
+      this.web3 = network[config.network];
+      this.minInterval = config.minInterval;
+      // create all contracts instances
+      this.contracts = []
+      for (let addr of config.addresses)
+        this.contracts.push( new this.web3.eth.Contract(this.abi, addr) );
+      
+      this.read = config.read;
+      
+      // no exception - keep last
+      this.loaded = true;
+
+    }catch(e){
+      console.error('Watch::ctor', e);
+      return;
+    }        
+  }
+  ////////////////////////////////////////////////////////
+  due(now){
+    if(!this.lastTime)
+      return true;
+
+    var diff = now - this.lastTime;
+    var minDiff = Math.floor(diff/1000/60);
+    return (minDiff >= this.minInterval);
+
+  }
+  ////////////////////////////////////////////////////////
+  async exec(counter){
+    // update exec time
+    this.lastTime = Date.now();
+
+    //iterate all contract instances 
+    for (let c of this.contracts){
+      // call all read functions within
+      for( let r of this.read){
+        let res;
+        try{
+          res = await c.methods[r.func]().call();
+        }catch(e){
+          console.error(`call func ${r.func} in ${this.name} ${c._address} failed!`);
+          console.error(e);
+        }
+        if(res){
+          // monitor return values
+          if(r.metrics){
+            // return value with fields
+            for (let m of r.metrics ){            
+              const path = `task.${this.name}-${c._address.substring(0,6)}.${r.func}.${m}`
+              console.log(`${path}:\t ${res[m]}`);
+              const val = parseFloat(res[m]);
+              counter.set(path, val);
+            }
+          } // simple numeric return value
+          else{
+            const path = `task.${this.name}-${c._address.substring(0,6)}.${r.func}.val`
+            console.log(`${path}:\t ${res}`);
+            const val = parseFloat(res);
+            counter.set(path, val);            
+          }
+        }        
+      }
+    }
+  }
+}
+
+////////////////////////////////////////////////////////
+class Watch{
+  ////////////////////////////////////////////////////////
+  constructor(configFile, abiFile, network, chan) {
+    this.loaded = false;    
     try {
       let config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
       chan.sendMsg('Load Watch config', config);
@@ -73,11 +153,19 @@ class Monitor{
     }
   }
   ////////////////////////////////////////////////////////
+  loadTasks(chan){
+    let tasks = [];    
+    let t = new Task("./task/aave-loop.json", "./watch-abi/aave-loop.json", this.network, chan);
+    if(t.loaded)
+      tasks.push(t);
+    
+    return tasks;
+  }
+  ////////////////////////////////////////////////////////
   loadWatchers(chan){    
     // Loop through all the files in the temp directory
     const basePath = "./watch";
-    const baseAbi = "./watch-abi";
-    var network = this.network;
+    const baseAbi = "./watch-abi";    
     var watchers = [];
     let files;
     try {
@@ -86,11 +174,15 @@ class Monitor{
       console.error(e);
       return null;
     }
+    // outside of callback (this issue)
+    const network = this.network;
+
     files.forEach(function (file, index) {
       console.log("LOAD WATCH", file);
       // Make one pass and make the file complete
       var configFile = path.join(basePath, file);
-      let stat = fs.statSync(configFile);      
+      let stat = fs.statSync(configFile);
+      
       if (stat.isFile()){
         var abiFile = path.join(baseAbi, file);
         let w = new Watch(configFile, abiFile, network, chan);
@@ -101,14 +193,17 @@ class Monitor{
     return watchers;
   }  
   ////////////////////////////////////////////////////////
-  async check(watchers) {
+  async check(watchers, tasks) {
     // object to track current block per network
     let curBlock = {};
 
+    // execute watchers
     for(let w of watchers){
       //update current block per network
       if(!curBlock[w.network]){        
         curBlock[w.network] = await w.web3.eth.getBlockNumber().catch(e => console.error(e));
+        if(!curBlock[w.network])
+          return;
       }
       // update track
       if(!this.track[w.name]){
@@ -122,7 +217,14 @@ class Monitor{
       }
 
       if (this.track[w.name].to > this.track[w.name].from)
-        await w.check(this.track[w.name]);
+        await w.check(this.track[w.name], this.counter);
+    }
+    // execute tasks
+    const now = Date.now();
+    for(let t of tasks){
+      if(t.due(now)){
+        await t.exec(this.counter);
+      }
     }
   }
   ////////////////////////////////////////////////////////
@@ -143,22 +245,37 @@ class Monitor{
 
     this.initNetwork();
     const watchers = this.loadWatchers(chan);
+    const tasks = this.loadTasks(chan);
 
     console.log("=============================================")
     console.log(`== ORBS CONTRACT MONITOR V${this.VERSION}`);
     console.log(`== PRODUCTION = ${isProduction? 'true':'false'}`);
-    console.log(JSON.stringify(config, null,2));
+    console.log(JSON.stringify(config, null, 2));
     console.log("============================================="); 
+
+    // debug overridr
+    if(!isProduction){
+      config.graphiteUrl = "http://18.189.17.142:2003";
+      config.secInterval = 10;
+    }
+
+    const COUNTER_PREFIX = `contractMonitor.${this.VERSION}.${isProduction? 'production':'debug'}`
+    const grphClient = graphite.createClient(config.graphiteUrl);
+    this.counter = require("./counter")(grphClient, COUNTER_PREFIX);
 
     setInterval(async ()=>{
       try{      
         // check blockchain
-        await this.check(watchers);
+        await this.check(watchers, tasks);
         // save tracl per each watcher      
         const jsn = JSON.stringify(this.track);
         fs.writeFileSync('./blockTrack.json', jsn);        
         // channel
         await chan.heartbeat();
+        
+        // send process ALIVE
+        this.counter.addStat("interval", 1);
+        this.counter.sendMetrics();
       }catch(e){
         console.error("monitor error", e);
         // send exception to discord        
