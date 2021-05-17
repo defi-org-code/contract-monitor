@@ -1,7 +1,7 @@
 {
   "name":"aave-loop",
   "network":"ETH",
-  "minInterval":1,  
+  "minInterval":5,  
   "addresses": [
     "0x10f2661d416F3a735E5579dd749731396d195639",
     "0x3dCEF2a8120E74Cc36e6fEe0EAf099431B63E555"
