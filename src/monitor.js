@@ -56,13 +56,7 @@ class Task{
     for (let c of this.contracts){
       // call all read functions within
       for( let r of this.read){
-        let res;
-        try{
-          res = await c.methods[r.func]().call();
-        }catch(e){
-          console.error(`call func ${r.func} in ${this.name} ${c._address} failed!`);
-          console.error(e);
-        }
+        let res = await c.methods[r.func]().call().catch(e => console.error(e));        
         if(res){
           // monitor return values
           if(r.metrics){
@@ -230,8 +224,23 @@ class Monitor{
   ////////////////////////////////////////////////////////
   initNetwork(){
     console.log("Init web3 network");
+    // Add reconnect option
+    const options = {
+      reconnect: {
+        auto: true,
+        delay: 5000, // ms
+        maxAttempts: 5,
+        onTimeout: false
+      }
+    }
+  
     for( let name in config.network){
-      this.network[name] = new Web3(config.network[name]);      
+      this.network[name] = new Web3(config.network[name],options);
+      this.network[name].on('close', (event) => {
+        // event fired
+        console.log(`network provider "${name}" fire closed, should attempt reconnect`);
+      })
+
       console.log(`${name}\t ${config.network[name]}`)
     }
   }
@@ -256,7 +265,7 @@ class Monitor{
     // debug overridr
     if(!isProduction){
       config.graphiteUrl = "http://18.189.17.142:2003";
-      config.secInterval = 10;
+      config.secInterval = 120;
     }
 
     const COUNTER_PREFIX = `contractMonitor.${this.VERSION}.${isProduction? 'production':'debug'}`
