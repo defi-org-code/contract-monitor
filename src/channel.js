@@ -73,14 +73,14 @@ class Channel{
   async heartbeat(){
     var diff = Date.now() - this.lastHeartbeat;
     var minDiff = Math.floor(diff/1000/60);
-    if (minDiff >= this.minHeartbeat){
-      // reset
-      this.lastHeartbeat = Date.now();
+    if (minDiff >= this.minHeartbeat){      
       // format message
       var str = tmplt_heartbeat;
       str = str.replace('{MIN}',''+this.minHeartbeat );      
       console.log('-------------------- heartbeat --------------------');
-      await this.send(JSON.parse(str));
+      await this.send(JSON.parse(str)).catch(e => console.error(e));
+      // reset
+      this.lastHeartbeat = Date.now();
     }
   }
   //////////////////////////////////////////////////////////////// 
