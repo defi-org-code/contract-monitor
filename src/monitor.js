@@ -16,6 +16,11 @@ class Task{
     this.loaded = false;    
     try {
       let config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+      // check inactive
+      this.active = config.hasOwnProperty('active')? config.active : true;
+      if(!this.active)
+        return;
+
       chan.sendMsg('Load Task config', config);
       this.abi = JSON.parse(fs.readFileSync(abiFile, 'utf8'));      
       this.name = config.name;
@@ -36,6 +41,10 @@ class Task{
       console.error('Watch::ctor', e);
       return;
     }        
+  }
+  ////////////////////////////////////////////////////////
+  get isLoaded(){
+    return this.loaded;
   }
   ////////////////////////////////////////////////////////
   due(now){
@@ -87,6 +96,11 @@ class Watch{
     this.loaded = false;    
     try {
       let config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+      // check inactive
+      this.active = config.hasOwnProperty('active')? config.active : true;
+      if(!this.active)
+        return;
+
       chan.sendMsg('Load Watch config', config);
       this.abi = JSON.parse(fs.readFileSync(abiFile, 'utf8'));      
       this.name = config.name;
@@ -147,30 +161,14 @@ class Monitor{
     }
   }
   ////////////////////////////////////////////////////////
-  loadTasks(chan){
-    let tasks = [];    
-    let t = new Task("./task/aave-loop.json", "./watch-abi/aave-loop.json", this.network, chan);
-    if(t.loaded)
-      tasks.push(t);
-    
-    return tasks;
-  }
-  ////////////////////////////////////////////////////////
-  loadWatchers(chan){    
-    // Loop through all the files in the temp directory
-    const basePath = "./watch";
-    const baseAbi = "./watch-abi";    
-    var watchers = [];
+  enumFolderFiles(basePath, baseAbi, cb){    
     let files;
     try {
       files = fs.readdirSync(basePath);
     }catch(e){
       console.error(e);
       return null;
-    }
-    // outside of callback (this issue)
-    const network = this.network;
-
+    }    
     files.forEach(function (file, index) {
       console.log("LOAD WATCH", file);
       // Make one pass and make the file complete
@@ -179,23 +177,44 @@ class Monitor{
       
       if (stat.isFile()){
         var abiFile = path.join(baseAbi, file);
-        let w = new Watch(configFile, abiFile, network, chan);
-        if(w.isLoaded)
-          watchers.push(w);
+        cb(configFile, abiFile);     
       }     
+    });    
+  }
+  ////////////////////////////////////////////////////////
+  loadWatchers(chan){    
+    let watchers = [];
+    const network = this.network;
+    this.enumFolderFiles("./watch", "./watch-abi", (configFile, abiFile)=>{
+      let w = new Watch(configFile, abiFile, network, chan);
+      if(w.isLoaded)
+        watchers.push(w);
     });
     return watchers;
+  }
+  
+  ////////////////////////////////////////////////////////
+  loadTasks(chan){    
+    let tasks = [];
+    const network = this.network;
+    this.enumFolderFiles("./task", "./watch-abi", (configFile, abiFile)=>{
+      let t = new Task(configFile, abiFile, network, chan);
+      if(t.isLoaded && t.active)
+        tasks.push(t);
+    });
+    return tasks;
+    
   }  
   ////////////////////////////////////////////////////////
-  async check(watchers, tasks) {
+  async check(watchers, tasks, chan) {
     // object to track current block per network
     let curBlock = {};
-
+  
     // execute watchers
     for(let w of watchers){
       //update current block per network
-      if(!curBlock[w.network]){        
-        curBlock[w.network] = await w.web3.eth.getBlockNumber().catch(e => console.error(e));
+      if(!curBlock[w.network]){
+        curBlock[w.network] = await w.web3.eth.getBlockNumber();         
         if(!curBlock[w.network])
           return;
       }
@@ -235,12 +254,7 @@ class Monitor{
     }
   
     for( let name in config.network){
-      this.network[name] = new Web3(config.network[name],options);
-      this.network[name].on('close', (event) => {
-        // event fired
-        console.log(`network provider "${name}" fire closed, should attempt reconnect`);
-      })
-
+      this.network[name] = new Web3(config.network[name],options);      
       console.log(`${name}\t ${config.network[name]}`)
     }
   }
@@ -265,7 +279,7 @@ class Monitor{
     // debug overridr
     if(!isProduction){
       config.graphiteUrl = "http://18.189.17.142:2003";
-      config.secInterval = 120;
+      config.secInterval = 10;
     }
 
     const COUNTER_PREFIX = `contractMonitor.${this.VERSION}.${isProduction? 'production':'debug'}`
@@ -275,7 +289,7 @@ class Monitor{
     setInterval(async ()=>{
       try{      
         // check blockchain
-        await this.check(watchers, tasks);
+        await this.check(watchers, tasks, chan);
         // save tracl per each watcher      
         const jsn = JSON.stringify(this.track);
         fs.writeFileSync('./blockTrack.json', jsn);        
@@ -288,7 +302,7 @@ class Monitor{
       }catch(e){
         console.error("monitor error", e);
         // send exception to discord        
-        await chan.sendMsg("monitor error: "+e);
+        await chan.sendMsg("monitor error - check err logs");
       }
     }, config.secInterval * 1000);
   }
@@ -299,7 +313,7 @@ module.exports = {
 }
 ////////////////////////////////////////////////////////
 async function testBunny(){                         
-  const web3 = new Web3('wss://misty-white-haze.bsc.quiknode.pro/18a20ffabf304a0b476b92ba91ea9aadaf6a3516/');  
+  const web3 = new Web3('https://misty-white-haze.bsc.quiknode.pro/18a20ffabf304a0b476b92ba91ea9aadaf6a3516/');  
   // sanity
   const curBlock = await web3.eth.getBlockNumber().catch(e => console.error(e));
   const network = {
@@ -312,5 +326,4 @@ async function testBunny(){
 // test
 if (require.main === module) {  
   testBunny();
-
 }
