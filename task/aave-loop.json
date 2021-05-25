@@ -1,5 +1,6 @@
 {
   "name":"aave-loop",
+  "active":false,
   "network":"ETH",
   "minInterval":5,  
   "addresses": [
