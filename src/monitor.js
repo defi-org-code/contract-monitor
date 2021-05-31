@@ -278,7 +278,7 @@ class Monitor{
 
     // debug overridr
     if(!isProduction){
-      config.graphiteUrl = "http://18.189.17.142:2003";
+      //config.graphiteUrl = "http://18.189.17.142:2003";
       config.secInterval = 10;
     }
 
