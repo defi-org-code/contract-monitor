@@ -1,7 +1,7 @@
 let monitor = require('./monitor');
 
 ///////////////////////////////////
-const VERSION = "1_8"
+const VERSION = "1_9"
 
 ///////////////////////////////////
 if (require.main === module) {
