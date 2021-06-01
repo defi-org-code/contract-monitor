@@ -1,4 +1,7 @@
 const axios = require('axios');
+const sleep = require('await-sleep');
+
+require('console-stamp')(console, '[HH:MM:ss]');
 
 const tmplt_heartbeat = `{
   "username": "contract-bot",
@@ -109,7 +112,9 @@ class Channel{
     await this.send(obj);
   }
   //////////////////////////////////////////////////////////////// 
-  async send(obj){       
+  async send(obj){
+    // space out messages every second to avoid rate exceed     
+    await sleep(1000);
     await axios.post(this.api, obj).catch(error => console.error(error));
   }
 }
