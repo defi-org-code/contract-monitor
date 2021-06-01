@@ -7,21 +7,23 @@ const channel = require('./channel');
 var fs = require('fs');
 var path = require('path');
 
+require('console-stamp')(console, '[HH:MM:ss]');
 
 ////////////////////////////////////////////////////////
 class Task{
   ////////////////////////////////////////////////////////
-  constructor(configFile, abiFile, network, chan) {
+  constructor(configFile, abiFile, network) {
     this.lastTime = null;
     this.loaded = false;    
-    try {
+    try {      
       let config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+      this.config = config;
+      
       // check inactive
       this.active = config.hasOwnProperty('active')? config.active : true;
       if(!this.active)
         return;
 
-      chan.sendMsg('Load Task config', config);
       this.abi = JSON.parse(fs.readFileSync(abiFile, 'utf8'));      
       this.name = config.name;
       this.network = config.network;
@@ -94,14 +96,15 @@ class Watch{
   ////////////////////////////////////////////////////////
   constructor(configFile, abiFile, network, chan) {
     this.loaded = false;    
-    try {
+    try {      
       let config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+      this.config = config;
+
       // check inactive
       this.active = config.hasOwnProperty('active')? config.active : true;
       if(!this.active)
         return;
-
-      chan.sendMsg('Load Watch config', config);
+      
       this.abi = JSON.parse(fs.readFileSync(abiFile, 'utf8'));      
       this.name = config.name;
       this.network = config.network;
@@ -161,7 +164,7 @@ class Monitor{
     }
   }
   ////////////////////////////////////////////////////////
-  enumFolderFiles(basePath, baseAbi, cb){    
+  async enumFolderFiles(basePath, baseAbi, cb){    
     let files;
     try {
       files = fs.readdirSync(basePath);
@@ -182,26 +185,35 @@ class Monitor{
     });    
   }
   ////////////////////////////////////////////////////////
-  loadWatchers(chan){    
+  async loadWatchers(chan){    
     let watchers = [];
-    const network = this.network;
-    this.enumFolderFiles("./watch", "./watch-abi", (configFile, abiFile)=>{
+    const network = this.network;    
+    await this.enumFolderFiles("./watch", "./watch-abi", async (configFile, abiFile)=>{
       let w = new Watch(configFile, abiFile, network, chan);
-      if(w.isLoaded)
-        watchers.push(w);
+      if(w.isLoaded){
+        watchers.push(w);        
+      }
     });
+    for (let w of watchers){
+      await chan.sendMsg("watcher loaded", w.config);
+    }
     return watchers;
   }
   
   ////////////////////////////////////////////////////////
-  loadTasks(chan){    
+  async loadTasks(chan){    
     let tasks = [];
     const network = this.network;
     this.enumFolderFiles("./task", "./watch-abi", (configFile, abiFile)=>{
       let t = new Task(configFile, abiFile, network, chan);
-      if(t.isLoaded && t.active)
-        tasks.push(t);
+      if(t.isLoaded && t.active){      
+        tasks.push(t);        
+      }
     });
+
+    for (let t of tasks){
+      await chan.sendMsg("task loaded", t.config);
+    }
     return tasks;
     
   }  
@@ -265,17 +277,16 @@ class Monitor{
     let chan = new channel.Channel(isProduction? config.channelApi: config.channelDBG, config.minHeartbeat);
    
     await chan.sendMsg(`-------------------- CONTRACT MONITOR ${this.VERSION} start --------------------`, config);
-
-    this.initNetwork();
-    const watchers = this.loadWatchers(chan);
-    const tasks = this.loadTasks(chan);
-
     console.log("=============================================")
     console.log(`== ORBS CONTRACT MONITOR V${this.VERSION}`);
     console.log(`== PRODUCTION = ${isProduction? 'true':'false'}`);
     console.log(JSON.stringify(config, null, 2));
     console.log("============================================="); 
 
+    this.initNetwork();
+    const watchers = await this.loadWatchers(chan);
+    const tasks = await this.loadTasks(chan);
+    
     // debug overridr
     if(!isProduction){
       //config.graphiteUrl = "http://18.189.17.142:2003";
