@@ -312,7 +312,8 @@ class Monitor{
         this.counter.sendMetrics();
       }catch(e){
         console.error("monitor error", e);
-        // send exception to discord        
+        // send exception to discord  
+        this.counter.addError("interval exception");      
         await chan.sendMsg("monitor error - check err logs");
       }
     }, config.secInterval * 1000);
